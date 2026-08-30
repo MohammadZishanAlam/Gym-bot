@@ -46,19 +46,20 @@ export default function Home() {
         body: JSON.stringify({ messages: updatedMessages }),
       });
 
-      const data = await res.json();
-      if (data.content) {
+      const data = await res.json().catch(() => ({ error: `Server returned status ${res.status}` }));
+      
+      if (res.ok && data.content) {
         setMessages([...updatedMessages, { role: "assistant", content: data.content }]);
       } else {
         setMessages([
           ...updatedMessages,
-          { role: "assistant", content: "⚠️ Unable to get a response. Please verify that GEMINI_API_KEY is configured in your environment." }
+          { role: "assistant", content: `⚠️ ${data.error || "Failed to get response from server."}` }
         ]);
       }
-    } catch {
+    } catch (err: any) {
       setMessages([
         ...updatedMessages,
-        { role: "assistant", content: "⚠️ Network error. Please check your connection and try again." }
+        { role: "assistant", content: `⚠️ Network error: ${err?.message || "Please check your connection."}` }
       ]);
     } finally {
       setLoading(false);
