@@ -3,20 +3,12 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const SYSTEM_PROMPT = `You are Gymbot, an energetic, certified AI Personal Trainer and Sports Nutritionist.
-Your guidelines:
-1. Provide structured, practical workout routines (sets, reps, muscle groups).
-2. Offer balanced nutrition and macronutrient advice.
-3. Emphasize proper form, progressive overload, and safety.
-4. Format responses cleanly using bold headers and markdown lists. Keep answers actionable and encouraging.`;
-
-// List of models to try in order of preference
 const CANDIDATE_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.0-flash",
   "gemini-1.5-flash-latest",
   "gemini-1.5-pro-latest",
-  "gemini-pro"
+  "gemini-pro",
 ];
 
 export async function POST(req: Request) {
@@ -29,15 +21,44 @@ export async function POST(req: Request) {
       );
     }
 
-    const { messages } = await req.json();
+    const { messages, profile, stats } = await req.json();
     const lastUserMessage = messages[messages.length - 1]?.content || "";
+
+    let biometricContext = "";
+    if (profile && stats) {
+      biometricContext = `
+USER PERSONAL PROFILE & BIOMETRIC METRICS:
+- Name: ${profile.name}
+- Age: ${profile.age} | Gender: ${profile.gender}
+- Height: ${profile.heightCm} cm | Current Weight: ${profile.weightKg} kg (Target: ${profile.targetWeightKg} kg)
+- Activity Level: ${profile.activityLevel}
+- Primary Goal: ${profile.fitnessGoal}
+- Dietary Preference: ${profile.dietaryPreference || "non_veg"}
+- Calculated BMI: ${stats.bmi} (${stats.bmiCategory})
+- Basal Metabolic Rate (BMR): ${stats.bmr} kcal
+- Maintenance TDEE: ${stats.tdee} kcal
+- Daily Calorie Target: ${stats.targetCalories} kcal
+- Daily Macro Split: Protein ${stats.macros.proteinGrams}g, Carbs ${stats.macros.carbsGrams}g, Fats ${stats.macros.fatsGrams}g
+- Daily Water Target: ${stats.waterLiters} Liters
+
+Always tailor workout routines, exercise intensity, meal suggestions, and recovery advice to this user's exact biometrics and targets. Reference their specific calorie and protein numbers when answering dietary and fitness inquiries.`;
+    }
+
+    const SYSTEM_PROMPT = `You are Gymbot, an energetic, certified elite AI Personal Trainer and Sports Nutritionist.
+${biometricContext}
+
+Your guidelines:
+1. Provide highly structured, practical, personalized workout routines (sets, reps, muscle groups, progressive overload).
+2. Offer balanced nutrition advice aligned with the user's exact calorie target (${stats?.targetCalories || "custom"} kcal) and protein goal (${stats?.macros?.proteinGrams || "150"}g).
+3. Emphasize proper exercise biomechanics, safety, and rest.
+4. Format responses cleanly using bold headers and markdown lists. Keep answers actionable and encouraging.`;
+
     const prompt = `${SYSTEM_PROMPT}\n\nUser Question: ${lastUserMessage}`;
 
     const genAI = new GoogleGenerativeAI(apiKey);
     let reply = "";
     let lastError = null;
 
-    // Try candidate models until one succeeds
     for (const modelName of CANDIDATE_MODELS) {
       try {
         const model = genAI.getGenerativeModel({ model: modelName });
@@ -47,7 +68,7 @@ export async function POST(req: Request) {
         if (reply) break;
       } catch (err: any) {
         lastError = err;
-        console.warn(`Model ${modelName} failed, trying next candidate:`, err?.message);
+        console.warn(`Model ${modelName} failed:`, err?.message);
       }
     }
 
