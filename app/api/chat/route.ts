@@ -1,9 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || "",
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 const SYSTEM_PROMPT = `You are Gymbot, an energetic, certified AI Personal Trainer and Sports Nutritionist.
 Your guidelines:
@@ -17,17 +15,13 @@ export async function POST(req: Request) {
     const { messages } = await req.json();
     const lastUserMessage = messages[messages.length - 1]?.content || "";
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: `${SYSTEM_PROMPT}\n\nUser Question: ${lastUserMessage}` }],
-        },
-      ],
-    });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const reply = response.text || "I couldn't generate a workout plan right now. Please try again!";
+    const prompt = `${SYSTEM_PROMPT}\n\nUser Question: ${lastUserMessage}`;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const reply = response.text() || "I couldn't generate a workout plan right now. Please try again!";
+
     return NextResponse.json({ role: "assistant", content: reply });
   } catch (error) {
     console.error("Gymbot Chat API Error:", error);
